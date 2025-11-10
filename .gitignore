@@ -1,0 +1,6 @@
+data/cifar/
+*.pyc
+*.pyo
+# Python bytecode
+__pycache__/
+*.py[cod]
