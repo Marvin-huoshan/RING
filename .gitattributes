@@ -1,1 +1,2 @@
+data/sentiment-140/*.csv filter=lfs diff=lfs merge=lfs -text
 data/sentiment-140/training.1600000.processed.noemoticon.csv filter=lfs diff=lfs merge=lfs -text
