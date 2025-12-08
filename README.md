@@ -47,11 +47,11 @@ This repository contains one main python files and one environment configuration
      conda activate Post_processing_Attack_test
      ```
    
-### Running the Experiments:
+### Running the Experiments
 
-1. **RING Attack Example:**
-    
-    ```bash
+#### RING Attack Example
+
+```bash
 python BD_Attack_Collusion.py \
   --dataset mnist \
   --lr 0.05 \
@@ -73,6 +73,7 @@ python BD_Attack_Collusion.py \
   --iid qty \
   --re_weight \
   --serial
+
 
 #### Dataset and Model
 
