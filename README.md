@@ -73,7 +73,8 @@ python BD_Attack_Collusion.py \
   --iid qty \
   --re_weight \
   --serial
-
+```
+###  Arguments
 
 #### Dataset and Model
 
