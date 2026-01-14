@@ -4,7 +4,6 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, datasets
 from PIL import Image
-from utils.cifar_Backdoor import CIFAR10_backdoor
 
 class Mnist_bd(Dataset):
     def __init__(self, trans=True, train=True, poison_ratio=1):
