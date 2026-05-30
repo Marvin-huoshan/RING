@@ -15,14 +15,19 @@ import os, sys, time, copy, random, signal, json
 import math
 from utils.sampling import (mnist_noniid_qty, mnist_noniid_dirichlet, cifar10_noniid_qty, cifar10_noniid_prob,
                             mnist_noniid_prob, cifar10_noniid_dirichlet, fmnist_noniid_qty, fmnist_noniid_dirichlet,
-                            fmnist_noniid_prob, sent140_dir, sent140_qty, sent140_prob)
+                            fmnist_noniid_prob, sent140_dir, sent140_qty, sent140_prob,
+                            cifar100_iid, cifar100_noniid_qty, cifar100_noniid_dirichlet)
 from utils.options import args_parser
-from models.Update import LocalUpdateDP, LocalUpdateDPSerial
+from models.Update import LocalUpdateDP, LocalUpdateDPSerial, LocalUpdateNeuroMNIST, LocalUpdateNeuroMNISTSerial
 from models.Nets import CNNMnist, CNNCifar_ResNet18, FastTextBinary
 from models.Fed import FedWeightAvg, FedWeightAvg_noise, FedWeightAvg_random
 from models.test import test_img, test_bd, test_txt, test_bd_txt
 from opacus.grad_sample import GradSampleModule
-from models.MnistBackdoor import Mnist_bd, Cifar_bd
+from models.MnistBackdoor import (Mnist_bd, Cifar_bd, Cifar100_bd,
+                                  MutableDBAMNISTTrainDataset, DBAMNISTFullTriggerTestDataset,
+                                  MutableNeuroMNISTTrainDataset, NeuroMNISTFullTriggerTestDataset,
+                                  get_mnist_dba_6piece_coords, get_mnist_full_trigger_coords,
+                                  get_mnist_visible_trigger_coords, sample_shard_poison_indices)
 from models.DeepS import DeepSight
 from tensorflow_privacy.compute_noise_from_budget_lib import compute_noise
 from scipy.stats import norm
@@ -179,6 +184,8 @@ if __name__ == '__main__':
     # parse args
     args = args_parser()
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
+    if args.backdoor_baseline in ('DBA', 'Neurotoxin') and (args.dataset != 'mnist' or args.model != 'cnn'):
+        exit('{} baseline currently supports MNIST with CNN only.'.format(args.backdoor_baseline))
     dict_users = {}
     dataset_train, dataset_test = None, None
 
@@ -200,6 +207,7 @@ if __name__ == '__main__':
             exit(0)
     elif args.dataset == 'cifar':
         args.num_channels = 3
+        args.num_classes = 10
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.4914, 0.4822, 0.4465),
@@ -218,6 +226,29 @@ if __name__ == '__main__':
             dict_users = cifar10_noniid_dirichlet(dataset_train, args.num_users, args.alpha)
         elif args.iid == 'prob':
             dict_users = cifar10_noniid_prob(np.array(dataset_train.targets), args.num_users, args.num_classes, args.alpha)
+        else:
+            print('No vaild Non-iid type')
+            exit(0)
+    elif args.dataset == 'cifar100':
+        args.num_channels = 3
+        args.num_classes = 100
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.5071, 0.4867, 0.4408),
+                        (0.2675, 0.2565, 0.2761))
+        ])
+        dataset_train = datasets.CIFAR100('./data/cifar100', train=True, download=True, transform=transform)
+        dataset_test = datasets.CIFAR100('./data/cifar100', train=False, download=True, transform=transform)
+
+        if args.iid == 'iid':
+            dict_users = cifar100_iid(dataset_train, args.num_users)
+        elif args.iid == 'qty':
+            dict_users = cifar100_noniid_qty(dataset_train, args.num_users, int(args.thre_labels))
+        elif args.iid == 'dir':
+            dict_users = cifar100_noniid_dirichlet(dataset_train, args.num_users, args.alpha)
+        elif args.iid == 'prob':
+            print('CIFAR100 prob split is not supported by the reference implementation.')
+            exit(0)
         else:
             print('No vaild Non-iid type')
             exit(0)
@@ -308,18 +339,20 @@ if __name__ == '__main__':
     net_glob = None
     # build model
     model_bd = None
-    if args.model == 'cnn' and args.dataset == 'cifar':
+    model_bd_test = None
+    dba_trigger_pieces = None
+    neuro_trigger = None
+    if args.model == 'cnn' and (args.dataset == 'cifar' or args.dataset == 'cifar100'):
         net_glob = CNNCifar_ResNet18(args=args).to(args.device)
         output_layer_name = get_output_layer_name(net_glob)
         args.num_channels = 3
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465),
-                        (0.2470, 0.2435, 0.2616))
-        ])
         if args.attack:
-            model_bd = Cifar_bd(train=True, poison_ratio=args.PDR)
-            model_bd_test = Cifar_bd(train=False, poison_ratio=1.0)
+            if args.dataset == 'cifar':
+                model_bd = Cifar_bd(train=True, poison_ratio=args.PDR)
+                model_bd_test = Cifar_bd(train=False, poison_ratio=1.0)
+            else:
+                model_bd = Cifar100_bd(train=True, poison_ratio=args.PDR)
+                model_bd_test = Cifar100_bd(train=False, poison_ratio=1.0)
             print(model_bd.__getitem__)
             print(model_bd_test.__getitem__)
 
@@ -327,8 +360,27 @@ if __name__ == '__main__':
         net_glob = CNNMnist(args=args).to(args.device)
         output_layer_name = get_output_layer_name(net_glob)
         if args.attack:
-            model_bd = Mnist_bd(train=True, poison_ratio=args.PDR)
-            model_bd_test = Mnist_bd(train=False, poison_ratio=1.0)
+            if args.backdoor_baseline == 'DBA':
+                if args.dataset != 'mnist':
+                    exit('DBA baseline currently supports MNIST only.')
+                dba_trigger_pieces = get_mnist_dba_6piece_coords()
+                model_bd_test = DBAMNISTFullTriggerTestDataset(
+                    target_label=1,
+                    full_trigger_coords=get_mnist_full_trigger_coords(),
+                    exclude_target_label=False,
+                )
+            elif args.backdoor_baseline == 'Neurotoxin':
+                if args.dataset != 'mnist':
+                    exit('Neurotoxin baseline currently supports MNIST only.')
+                neuro_trigger = get_mnist_visible_trigger_coords()
+                model_bd_test = NeuroMNISTFullTriggerTestDataset(
+                    target_label=1,
+                    full_trigger_coords=neuro_trigger,
+                    exclude_target_label=True,
+                )
+            else:
+                model_bd = Mnist_bd(train=True, poison_ratio=args.PDR)
+                model_bd_test = Mnist_bd(train=False, poison_ratio=1.0)
     elif args.dataset == 'sent140' and args.model == 'lstm':
         net_glob = FastTextBinary(vocabSize).to(args.device)
     else:
@@ -352,29 +404,58 @@ if __name__ == '__main__':
         sizes = np.array([len(v) for v in dict_users.values()])
         acc_test = []
         Cls = LocalUpdateDPSerial if args.serial else LocalUpdateDP
+        NeuroCls = LocalUpdateNeuroMNISTSerial if args.serial else LocalUpdateNeuroMNIST
         clients = [Cls(args, dataset_train, dict_users[i], attack=False, attacker=False) for i in range(args.num_users)]
 
         if args.attack:
-            if args.dataset == 'sent140':
+            attacker_datasets = None
+            if args.backdoor_baseline == 'DBA':
+                if args.attack_type not in ('Input', 'Output', 'Collusion'):
+                    print('No Valid attack type for DBA!======')
+                    exit(0)
+                attacker_datasets = [
+                    MutableDBAMNISTTrainDataset(train=True, target_label=1, trans=True)
+                    for _ in range(args.num_users)
+                ]
+                clients_attacker = [
+                    Cls(args, attacker_datasets[i], dict_users[i],
+                        attack=args.attack_type in ('Output', 'Collusion'), attacker=True)
+                    for i in range(args.num_users)
+                ]
+            elif args.backdoor_baseline == 'Neurotoxin':
+                if args.attack_type not in ('Input', 'Output', 'Collusion'):
+                    print('No Valid attack type for Neurotoxin!======')
+                    exit(0)
+                attacker_datasets = [
+                    MutableNeuroMNISTTrainDataset(train=True, target_label=1, trans=True)
+                    for _ in range(args.num_users)
+                ]
+                clients_attacker = [
+                    NeuroCls(args, attacker_datasets[i], dataset_train, dict_users[i],
+                             mode=args.attack_type, attack=args.attack_type != 'Input', attacker=True)
+                    for i in range(args.num_users)
+                ]
+            elif args.dataset == 'sent140':
                 ds = dataset_train_extend  # clean + poisoned
                 dict_for_attack = dict_users_attack  # clean shard ∪ backdoor_idx for sent140
             else:
                 ds = model_bd  # prebuilt attacker dataset for other tasks
                 dict_for_attack = dict_users
-            if args.attack_type == 'Input':
-                clients_attacker = [
-                    Cls(args, ds, dict_for_attack[i], attack=False, attacker=True)
-                    for i in range(args.num_users)
-                ]
+            if args.backdoor_baseline == 'standard':
+                if args.attack_type == 'Input':
+                    clients_attacker = [
+                        Cls(args, ds, dict_for_attack[i], attack=False, attacker=True)
+                        for i in range(args.num_users)
+                    ]
 
-            elif args.attack_type in ('Collusion', 'Output', 'C_2', 'C_3'):
-                clients_attacker = [
-                    Cls(args, ds, dict_for_attack[i], attack=True, attacker=True)
-                    for i in range(args.num_users)
-                ]
-            else:
-                print('No Valid attack type!======')
-                exit(0)
+                elif args.attack_type in ('Collusion', 'Output', 'C_2', 'C_3'):
+                    clients_attacker = [
+                        Cls(args, ds, dict_for_attack[i], attack=True, attacker=True)
+                        for i in range(args.num_users)
+                    ]
+                else:
+                    print('No Valid attack type!======')
+                    exit(0)
         m, loop_index = max(int(args.frac * args.num_users), 1), int(1 / args.frac)
 
         first_call = True
@@ -430,10 +511,27 @@ if __name__ == '__main__':
                 if iter >= 4:
                     print("number of attacker:", args.num_attacker)
                     current_lr = 0
-                    for idx in idx_attacker:
+                    for slot, idx in enumerate(idx_attacker):
                         model = copy.deepcopy(net_glob)
                         if args.dp_mechanism != 'no_dp':
                             model = GradSampleModule(model)
+                        if args.backdoor_baseline == 'DBA':
+                            poison_indices = sample_shard_poison_indices(
+                                dict_users[idx],
+                                args.PDR,
+                                int(args.seed + iter * args.num_users + idx),
+                            )
+                            attacker_datasets[idx].set_poison_spec(
+                                poison_indices,
+                                dba_trigger_pieces[slot % len(dba_trigger_pieces)],
+                            )
+                        elif args.backdoor_baseline == 'Neurotoxin':
+                            poison_indices = sample_shard_poison_indices(
+                                dict_users[idx],
+                                args.PDR,
+                                int(args.seed + iter * args.num_users + idx),
+                            )
+                            attacker_datasets[idx].set_poison_spec(poison_indices, neuro_trigger)
                         local = clients_attacker[idx]
                         length_locals.append(len(local.idxs))
                         w, loss, current_lr = local.train(model)
@@ -592,8 +690,3 @@ if __name__ == '__main__':
             first_call = False
             last_iter_done = iter
             acc_test.append(to_float(acc_t))
-
-
-
-
-

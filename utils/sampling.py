@@ -287,6 +287,34 @@ def cifar10_noniid_prob(dataset_label, num_clients, num_classes, q):
     return dict_users
 
 
+def cifar100_iid(dataset, num_users):
+    """
+    Sample I.I.D. client data from CIFAR100 dataset.
+    """
+    dict_users, all_idxs = {}, [i for i in range(len(dataset))]
+    num_items = int(len(dataset) / num_users)
+    for i in range(num_users):
+        dict_users[i] = set(np.random.choice(all_idxs, num_items, replace=False))
+        all_idxs = list(set(all_idxs) - dict_users[i])
+    return dict_users
+
+
+def cifar100_noniid_qty(dataset, num_clients, num_labels_per_client):
+    """
+    Sample non-I.I.D client data from CIFAR100 dataset with quantity-based label imbalance.
+    Mirrors the reference CIFAR100 helper.
+    """
+    return cifar10_noniid_qty(dataset, num_clients, num_labels_per_client)
+
+
+def cifar100_noniid_dirichlet(dataset, num_users, alpha):
+    """
+    Sample non-I.I.D client data from CIFAR100 dataset using Dirichlet distribution.
+    Mirrors the reference CIFAR100 helper.
+    """
+    return cifar10_noniid_dirichlet(dataset, num_users, alpha)
+
+
 def fmnist_noniid_qty(dataset, num_clients, num_labels_per_client):
     """
     Sample non-I.I.D client data from a dataset with quantity-based label imbalance
@@ -462,5 +490,4 @@ if __name__ == '__main__':
     # trans_mnist = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     # dataset_train = datasets.MNIST('../data/mnist/', train=True, download=True, transform=trans_mnist)
     print(fashion_iid(dataset_train, 1000)[0])
-
 

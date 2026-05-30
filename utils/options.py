@@ -28,6 +28,9 @@ def args_parser():
     parser.add_argument('--num_channels', type=int, default=1, help="number of channels of imges")
     parser.add_argument('--gpu', type=int, default=0, help="GPU ID, -1 for CPU")
     parser.add_argument('--attack', action='store_true', help='backdoor attack')
+    parser.add_argument('--backdoor_baseline', type=str, default='standard',
+                        choices=['standard', 'DBA', 'Neurotoxin'],
+                        help='backdoor baseline: standard, DBA, or Neurotoxin')
     parser.add_argument('--num_attacker', type=int, default=1, help='number of attacker (default: 1)')
     parser.add_argument('--dp_mechanism', type=str, default='Gaussian',
                         help='differential privacy mechanism')
@@ -49,6 +52,10 @@ def args_parser():
     parser.add_argument('--defense', type=str, help="Defense method")
     parser.add_argument('--log_distance', type=bool, default=False, help="output krum distance")
     parser.add_argument('--PDR', type=float, default=1, help="poison data rate")
+    parser.add_argument('--neuro_mask_ratio', type=float, default=0.95,
+                        help='fraction of small-gradient parameters kept by Neurotoxin')
+    parser.add_argument('--neuro_aggregate_all_layer', type=int, default=0,
+                        help='use one global Neurotoxin mask threshold when set to 1')
     parser.add_argument('--flame_noise', type=float, default=0.001, help='Flame noise')
     parser.add_argument('--save', type=str, default='save', help="dic to save results (ending without /)")
     parser.add_argument('--silhouette_threshold', type=float, default=0.5, help="Minimum silhouette score for clustering.")
