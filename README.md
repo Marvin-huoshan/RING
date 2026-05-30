@@ -10,7 +10,7 @@ By evaluating multiple defenses and comparing against baseline attacks, this rep
 
 ## Contents
 
-This repository contains one main python files and one environment configuration file:
+This repository contains one main python file and one environment configuration file:
 
 - `BD_Attack_Collusion.py`: Main implementation for evaluating the RING attack under DP-FL against state-of-the-art defenses.
 - `environment.yml`: Conda environment specification listing all required dependencies.
@@ -44,7 +44,7 @@ This repository contains one main python files and one environment configuration
 3. **Activate the environment:**
 
     ```bash
-     conda activate Post_processing_Attack_test
+     conda activate FL_DP
      ```
    
 ### Running the Experiments
@@ -74,10 +74,11 @@ python BD_Attack_Collusion.py \
   --re_weight
 ```
 
-Additional baseline:
+Additional backdoor baselines can be selected with --backdoor_baseline:
 
-add
-- `--backdoor_baseline`  DBA or Neurotoxin
+bash --backdoor_baseline standard --backdoor_baseline DBA --backdoor_baseline Neurotoxin 
+
+The default value is standard, which preserves the original visible-trigger / RING behavior. Results are saved under Results, Results_DBA, and Results_Neuro for standard, DBA, and Neurotoxin, respectively.
 
 ###  Arguments
 
@@ -86,7 +87,6 @@ add
 - `--dataset`  
   Specifies the dataset:
   - `mnist` — MNIST  
-  - `fashion-mnist` — Fashion-MNIST  
   - `cifar` — CIFAR-10  
   - `cifar100` — CIFAR-100 (`prob` split unsupported)
   - `sent140` — Sentiment-140  
