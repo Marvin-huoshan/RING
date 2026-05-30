@@ -1,6 +1,6 @@
 # RING
 
-**Anonymous repository for the submission to ACM CCS 2026:** *Your Privacy My Cloak: Backdoor Attack on Differentially Private Federated Learning*
+**Anonymous repository for the submission to IEEE S&P 2027:** *Your Privacy My Cloak: Backdoor Attack on Differentially Private Federated Learning*
 
 ## Description
 
