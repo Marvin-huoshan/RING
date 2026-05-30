@@ -40,6 +40,13 @@ import torch.nn as nn
 import pickle
 
 _PREFIX = "_module."
+RESULTS_ROOT = 'Results'
+
+def get_result_root(backdoor_baseline):
+    return {
+        'DBA': 'Results_DBA',
+        'Neurotoxin': 'Results_Neuro',
+    }.get(backdoor_baseline, 'Results')
 
 def to_float(x):
     if isinstance(x, torch.Tensor):
@@ -82,7 +89,7 @@ def assert_no_inplace(model: nn.Module):
 
 
 def write_to_file(num, fname, dname, clear=False):
-    file_path = os.path.join('Results', dname + fname + '.txt')
+    file_path = os.path.join(RESULTS_ROOT, dname + fname + '.txt')
     mode = "w" if clear else "a"
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, mode) as file:
@@ -186,6 +193,7 @@ if __name__ == '__main__':
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
     if args.backdoor_baseline in ('DBA', 'Neurotoxin') and (args.dataset != 'mnist' or args.model != 'cnn'):
         exit('{} baseline currently supports MNIST with CNN only.'.format(args.backdoor_baseline))
+    RESULTS_ROOT = get_result_root(args.backdoor_baseline)
     dict_users = {}
     dataset_train, dataset_test = None, None
 

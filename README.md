@@ -71,9 +71,14 @@ python BD_Attack_Collusion.py \
   --gpu 1 \
   --PDR 0.5 \
   --iid qty \
-  --re_weight \
-  --serial
+  --re_weight
 ```
+
+Additional baseline:
+
+add
+- `--backdoor_baseline`  DBA or Neurotoxin
+
 ###  Arguments
 
 #### Dataset and Model
@@ -83,6 +88,7 @@ python BD_Attack_Collusion.py \
   - `mnist` — MNIST  
   - `fashion-mnist` — Fashion-MNIST  
   - `cifar` — CIFAR-10  
+  - `cifar100` — CIFAR-100 (`prob` split unsupported)
   - `sent140` — Sentiment-140  
 
 - `--model`  
@@ -140,6 +146,9 @@ python BD_Attack_Collusion.py \
   - `Input` — DP-opt-in  
   - `Output` — DP-opt-out  
   - `Collusion` — **RING (proposed attack)**  
+
+- `--backdoor_baseline`
+  Backdoor baseline (`standard`, `DBA`, or `Neurotoxin`). Outputs are saved under `Results`, `Results_DBA`, and `Results_Neuro`, respectively. DBA and Neurotoxin currently support MNIST + CNN only; CIFAR100 supports the standard visible-trigger / Collusion path.
 
 - `--num_attacker`  
   Number of malicious clients per round.
