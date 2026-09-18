@@ -1,6 +1,6 @@
 # RING
 
-**Anonymous repository for the submission to IEEE S&P 2027:** *Your Privacy My Cloak: Backdoor Attack on Differentially Private Federated Learning*
+**Code repository for the IEEE S&P 2027 paper:** *Your Privacy My Cloak: Backdoor Attacks on Differentially Private Federated Learning*
 
 ## Description
 
